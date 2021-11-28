@@ -23,6 +23,15 @@
 
 
 int main() {
-	poker newGame;
-	newGame.playGame();
+	deck testdeck;
+	testdeck.shuffle();
+	player testplayer(testdeck.drawCards(5));
+	testplayer.printHand();
+	findHandValue(testplayer.hand);
+	
+
+
+
+	//poker newGame;
+	//newGame.playGame();
 }

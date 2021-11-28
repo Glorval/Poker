@@ -1,6 +1,20 @@
 #include "GlorwynMemory.h"
 
 
+listItem* fillList(char* data, int datalength) {
+	listItem* newlist = (listItem*)gcalloc(datalength, sizeof(listItem));
+	for (int fill = 0; fill < datalength; fill++) {
+		newlist[fill].data = (void*)data[fill];
+		newlist[fill].flag = 0;
+	}
+	return(newlist);
+}
+
+int* fillPseudolist(int datalength) {
+	return((int*)gcalloc(datalength, sizeof(int*)));
+}
+
+
 void* galloc(int Size) {
 	int* newMemory = (int*)malloc((Size * sizeof(char)) + sizeof(int));
 	int* size = newMemory;
