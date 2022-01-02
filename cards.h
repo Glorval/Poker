@@ -6,6 +6,8 @@
 #include "GlorwynMemory.h"
 enum suits { diamonds, hearts, clubs, spades };
 enum levels {two, three, four, five, six, seven, eight, nine, ten, jack, queen, king, ace};
+#define suitPos 0
+#define levelPos 1
 
 struct card {
 	char* name;
