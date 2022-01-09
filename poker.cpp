@@ -74,7 +74,8 @@ aiPlayer::aiPlayer(Cards* givenHand, int givenmoney, int givenaggresiveness, std
 void aiPlayer::initializeMaxBet() {
 	//Essentially, average the aggressiveness, a random multiplier, and hand value for the max amount of money we will bet
 	//(also, its 'fuck you' math time xddddd)
-	maxBet = (int)((((double)(aggressiveness + (rand() % 100)) + (calcHandValue(hand, handsize) / 2)) / 700) * money);
+	//TODO : Swap out calchandvalue
+	//maxBet = (int)((((double)(aggressiveness + (rand() % 100)) + (calcHandValue(hand, handsize) / 2)) / 700) * money);
 	//std::cout << "AI max bet: " << maxBet <<"Aggressiveness: "<<aggressiveness<<"\n";//debug line
 }
 
@@ -227,7 +228,7 @@ void poker::playRound() {
 				int winnerplayer = 0;
 				for (int cPlayer = 0; cPlayer < playercount; cPlayer++) {
 					if (foldedPlayers[cPlayer] == 0) {
-						double curScore = calcHandValue(players[cPlayer]->hand, players[cPlayer]->getHandsize());
+						double curScore = 0;//calcHandValue(players[cPlayer]->hand, players[cPlayer]->getHandsize());
 						if (curScore > highestScore) {
 							highestScore = curScore;
 							winnerplayer = cPlayer;
@@ -293,7 +294,7 @@ void poker::playGame(){
 	}
 }
 
-enum handTypes { RoyalFlush, StraightFlush, FourKind, FullHouse, Flush, Straight, ThreeKind, TwoPair, OnePair };
+enum handTypes { RoyalFlush, StraightFlush, FourKind, FullHouse, Flush, Straight, ThreeKind, TwoPair, TwoKind };
 
 
 
@@ -305,12 +306,13 @@ handValue findValue(Cards* sortedHand) {
 	ourHandValue.potentialHands = NULL;
 	int potentialHandCount = 0;
 
-	int distances[5] = {
-		sortedHand[2].data[levelPos] - sortedHand[0].data[levelPos],
-		sortedHand[2].data[levelPos] - sortedHand[1].data[levelPos],
-		0,//Middle card is always just itself
-		sortedHand[2].data[levelPos] - sortedHand[3].data[levelPos],
-		sortedHand[2].data[levelPos] - sortedHand[4].data[levelPos]
+	//ease of use
+	int levels[5] = {
+		sortedHand[0].data[levelPos],
+		sortedHand[1].data[levelPos],
+		sortedHand[2].data[levelPos],
+		sortedHand[3].data[levelPos],
+		sortedHand[4].data[levelPos]
 	};
 
 	int suits[5] = {
@@ -321,523 +323,184 @@ handValue findValue(Cards* sortedHand) {
 		sortedHand[4].data[suitPos]
 	};
 
-	checkReturn returns = checkStraight(distances, suits);
-	char* entry = (char*)&returns;
-	int usefulCount = (entry[0] + entry[1] + entry[2] + entry[3] + entry[4]);
 
+	//STRAIGHT
+	char straightDifficultyLevels[] = { 0, 8, 18, -1, -1 };
+
+	
+	//END OF STRAIGHT
+
+	//FLUSH
 
 	return(ourHandValue);
 }
 
-checkReturn checkStraight(int* distances, int* suits) {
+//data is five cards useless or not, hand value, and the highcard (Could be -1 if hand incomplete, but don't rely)
+//Potential hands is where we save it if it is almost usable, handcounts is just how long this array is
+//actualHand is for saving to if we've got a whole hand
+//difficulties are told to us for setting potentialHands based off how many missing we have
+//margin of error is how many cards we can have be bad before we just throw it out
+void setPotential(char* data, handPotential* potentialHands, int handcounts, handValue* actualHand, int difficulties[5], int marginOfError) {
+	int error = data[0] + data[1] + data[2] + data[3] + data[4];//find the margin of error in the hand
+	if (error > marginOfError) {//if it is unacceptably high, abort
+		return;
+	}else if (error != 0) {//If incomplete
+		//otherwise,
+		handcounts++;//we need to count up how many potential hands we have
+		potentialHands = (handPotential*)grealloc(potentialHands, handcounts);//actually give ourselves the memory
+		potentialHands->difficulty = difficulties[error];//set the difficulty based on how much error we have
+		potentialHands->potentialHandValue = data[5];//take the potential hand value
+		potentialHands->neededToSwitch[0] = data[0];//and set all those we need to switch
+		potentialHands->neededToSwitch[1] = data[1];
+		potentialHands->neededToSwitch[2] = data[2];
+		potentialHands->neededToSwitch[3] = data[3];
+		potentialHands->neededToSwitch[4] = data[4];
+
+	} else {//If it's a complete hand
+		actualHand->handType = data[5];
+		actualHand->handTypeHighest = data[6];
+	}
+}
+
+checkReturn checkStraight(int* levels, int* suits) {
 	//Optimization Note - Could somehow remove the distance zero search, but then we'd have to mark it useful anyhow
 	int lookingFor[5] = { -2, -1, 0, 1, 2 };
 	char distancesFound[5] = { 0,0,0,0,0 };
-	char usefulCards[5] = { 0, 0, 0, 0, 0 };
+	char uselessCards[7] = {1, 1, 1, 1, 1, Straight, 0};
 
 	for (int cCard = 0; cCard < 5; cCard++) {
+		if (levels[cCard] > uselessCards[6]) {//find the highcard on the way
+			uselessCards[6] = levels[cCard];
+		}
 		for (int checker = 0; checker < 5; checker++) {
-			if (distancesFound[checker] != 1 && distances[cCard] == lookingFor[checker]) {
-				usefulCards[cCard] = 1;
+			if (distancesFound[checker] != 1 && (levels[cCard] - levels[3]/*middle card*/)== lookingFor[checker]) {
+				uselessCards[cCard] = 0;
 				distancesFound[checker] = 1;
 				break;
 			}
 		}
 	}
-
-	return(*(checkReturn*)&usefulCards);
-}
-
-//requires that the hand be sorted upon entry.
-handValue findHandValue(Cards* hand) {
-	int handsize = pSize(hand) / sizeof(Cards);
-	//Cards** sortedHand = (Cards**)gcalloc(handsize, sizeof(Cards**));
-	handValue ourHandValue;
-	ourHandValue.handType = -1;
 	
-
-	ourHandValue.highestCard = hand[0].data[1];
-
-	
-
-	int neededCards[5] = { 0 };//Mark these as a needed slot just as we go down.
-	//This will be used to allow a function to check if the given potential tradeup
-	//will cuck our current hand by getting rid of a card we need.
-	ourHandValue.potentialHands = (handPotential*)gcalloc(1, sizeof(handPotential));
-	int potentialHandCount = 0;
-
-	//Checking against all the functions
-	//Standard pattern is 'is our return flag 1, if so the function did a thing.'
-	//Then from there some internal logic specific to the insides of each one.
-	//Some might need to check certain things, but ultimately it falls down to
-	//saving this as as the best full hand type we can muster, saving it as a potential hand to shoot for,
-	//or just moving on because we aren't involved.
-
-
-	//Todo- Combine straight & flush into one function.
-	if (straight(hand, &ourHandValue.potentialHands[potentialHandCount], handsize) == 1) {
-		//If difficulty = 0, then this is a whole hand and we save it.
-		if (ourHandValue.potentialHands[potentialHandCount].difficulty == 0 && ourHandValue.handType != -1) {
-			ourHandValue.handType = ourHandValue.potentialHands[potentialHandCount].potentialHandValue;
-			ourHandValue.handTypeHighest = ourHandValue.potentialHands[potentialHandCount].currentHighcard;
-			neededCards[0] = 1;//easier to just set all to one here since we need all in a straight
-			neededCards[1] = 1;
-			neededCards[2] = 1;
-			neededCards[3] = 1;
-			neededCards[4] = 1;
-		} else {//Otherwise, we keep it solely saved to ourHandValue and we'll just overwrite it next time.
-			potentialHandCount++;
-			ourHandValue.potentialHands = (handPotential*)grealloc(ourHandValue.potentialHands, sizeof(handPotential) * (potentialHandCount + 1));
-		}
-	}
-
-
-	if (flush(hand, &ourHandValue.potentialHands[potentialHandCount], handsize) == 1) {
-		//If difficulty = 0, then this is a whole hand and we save it.
-		if (ourHandValue.potentialHands[potentialHandCount].difficulty == 0 && ourHandValue.handType != -1) {
-			ourHandValue.handType = ourHandValue.potentialHands[potentialHandCount].potentialHandValue;
-			ourHandValue.handTypeHighest = ourHandValue.potentialHands[potentialHandCount].currentHighcard;
-			neededCards[0] = 1;//easier to just set all to one here since we need all in a flush
-			neededCards[1] = 1;
-			neededCards[2] = 1;
-			neededCards[3] = 1;
-			neededCards[4] = 1;
-		} else {//Otherwise, we keep it solely saved to ourHandValue and we'll just overwrite it next time.
-			potentialHandCount++;
-			ourHandValue.potentialHands = (handPotential*)grealloc(ourHandValue.potentialHands, sizeof(handPotential) * (potentialHandCount + 1));
-		}
-	}
-
-
-
-
-
-
-
-
-
-
-
-
-	ourHandValue.handType = 1;
-	return(ourHandValue);
+	return(*(checkReturn*)&uselessCards);
 }
 
-//struct handpotential {
-//	int difficulty;
-//	char positions[5];
-//	int potentialHandValue;
-//	char failureBad;
-//};
+checkReturn checkFlush(int* suits) {
+	//Expansion Note - Only supports saying stuff is useful if there's already three of a suit, could be made to 
+	//do more for if it was desired to go 'you have two clubs, chance of getting three more is x%'
 
+	//enum suits { diamonds, hearts, clubs, spades };
+	char suitOccurances[4] = { 0,0,0,0 };
+	char uselessCards[6] = { 1, 1, 1, 1, 1, Flush};
 
-void findHighcard(Cards* hand, handValue* handval,int handsize) {
-	int highcard = -1;
-	for (int c = 0; c < handsize; c++) {
-		if (hand[c].data[1] > highcard) {
-			highcard = hand[c].data[1];
-		}
-	}
-	handval->highestCard = highcard;
-}
-
-
-//How this works:
-//First step is to get distance between each card and the middle one
-//Second is to run through and look for cards -2, -1, 1, and 2 away from the middle.
-//Now we have all the useful cards, the inverse of cards we need to swap.
-//Difficulty is 6 for one off, 15 for two off.
-int straight(Cards* sortedHand, handPotential* handpotential, int handsize) {
-	if (handsize != 5) {
-		return(0);
-	}
-	int distance[4] = { 0 };
-
-	//All cards measured against the first
-	distance[0] = sortedHand[2].data[levelPos] - sortedHand[0].data[levelPos];
-	distance[1] =  sortedHand[2].data[levelPos] - sortedHand[1].data[levelPos];
-	distance[2] = sortedHand[2].data[levelPos] - sortedHand[3].data[levelPos];
-	distance[3] = sortedHand[2].data[levelPos] - sortedHand[4].data[levelPos];
-
-	//Search through all cards looking for -2, -1, 1, and 2 distances from the centre.
-	char usefulCards[4] = { 0,0,0,0 };
-	int usefulCount = 0;
-	int currentSearch = -2;
-	for (int cRun = 0; cRun < 4; cRun++) {
-		for (int cItem = 0; cItem < 4; cItem++) {
-			if (distance[cItem] == currentSearch) {
-				usefulCards[cItem] = 1;
-				usefulCount++;
+	for (int cCard = 0; cCard < 5; cCard++) {
+		switch (suits[cCard]) {
+			case(diamonds):
+				suitOccurances[diamonds]++;
 				break;
-			}
-		}
-		currentSearch++;
-		if (currentSearch == 0) {
-			currentSearch++;
+			case(hearts):
+				suitOccurances[hearts]++;
+				break;
+			case(clubs):
+				suitOccurances[clubs]++;
+				break;
+			case(spades):
+				suitOccurances[spades]++;
+				break;
 		}
 	}
 
-	int difficulty = 0;
-	if (usefulCount == 3) {
-		difficulty = 6;
-	} else if (usefulCount == 2) {
-		difficulty = 15;
-	} else if (usefulCount < 2){//Too few useful cards, insanity territory to try for a straight
-		return(-1);
+	int highestSuitOccurancePosition = 0;//Note - this also represents the suit itself. 
+	//Reason being that the suits go '0 = diamonds, 1 = hearts... etc' and the array here
+	//is in that order too.
+	for (int cPos = 1; cPos < 4; cPos++) {
+		if (suitOccurances[cPos] > suitOccurances[highestSuitOccurancePosition]) {
+			highestSuitOccurancePosition = cPos;
+		}
 	}
-	handpotential->difficulty = difficulty;
-	handpotential->currentHighcard = sortedHand[0].data[levelPos];
-	handpotential->neededToSwitch[0] = !usefulCards[0];
-	handpotential->neededToSwitch[1] = !usefulCards[1];
-	handpotential->neededToSwitch[3] = !usefulCards[2];
-	handpotential->neededToSwitch[4] = !usefulCards[3];
-	handpotential->potentialHandValue = Straight;
-	return(1);
+	if (suitOccurances[highestSuitOccurancePosition] <= 2) {//If we have shitall for this it's not even worth considering
+		return(*(checkReturn*)&uselessCards);
+	}
+
+	//Go through each card and check to see if it's the right suit
+	//Probably not the best way to do this, as stuff could be done to mark them out whilst counting the most frequent suit
+	for (int cCard = 0; cCard < 5; cCard++) {
+		if (suits[cCard] == highestSuitOccurancePosition) {
+			uselessCards[cCard] = 0;
+		}
+	}
+
+	return(*(checkReturn*)&uselessCards);
 }
 
-
-//How this works is it tallies up how many of each suit the hand has and keeps track of which cards
-//are in each suit. Then, it sends back the positions of each card that'd need to be replaced to make
-//the flush.
-//Difficulty goes 1, 4
-int flush(Cards* sortedHand, handPotential* handpotential, int handsize) {
-	int wildPos[2] = { -1, -1 };//Allows up to two wilds
-	int difficulty = 0;
-
-	//enum suits { diamonds, hearts, clubs, spades }; < reference
-	//this follows the same order.
+checkReturn checkPairs(int* levels) {
+	checkReturn returns;
+	//enum levels {	 two, three, four, five, six, seven, eight, nine, ten, jack, queen, king, ace };
 	struct item {
-		char count;
-		char ourCards[5] = { 1, 2, 3, 4 ,5 };
-	}Item[4];
-	//memcpy(Item, &zero, sizeof(Item) * 4);
-	char zero = 0;//Zero it all out
-	for (int current = 0; current < sizeof(Item); current++) {
-		char* temp = ((char*)Item + current);
-		*temp = zero;
+		char levelFreq;
+		char ourLevel;
+	}Items[13];
+	for (int cCard = 0; cCard < 5; cCard++) {
+		Items[levels[cCard]].levelFreq++;
+		Items[levels[cCard]].ourLevel = levels[cCard];
 	}
+
+	qsort(Items, 13, sizeof(struct item), qsortCompDesecndingFirstByte);
 	
-
-	//Count all the occurances of the suits
-	for (int currentCard = 0; currentCard < handsize; currentCard++) {
-		if (sortedHand[currentCard].data[suitPos] == diamonds) {
-			Item[0].count++;
-			Item[0].ourCards[currentCard] = 1;
-		} else if (sortedHand[currentCard].data[suitPos] == hearts) {
-			Item[1].count++;
-			Item[1].ourCards[currentCard] = 1;
-		} else if (sortedHand[currentCard].data[suitPos] == clubs) {
-			Item[2].count++;
-			Item[2].ourCards[currentCard] = 1;
-		} else if (sortedHand[currentCard].data[suitPos] == spades) {
-			Item[3].count++;
-			Item[3].ourCards[currentCard] = 1;
-		}
-	}
-
-	qsort(Item, 4, sizeof(struct item), qsortCompDesecndingFirstByte);
-
-	//are all in the same category, aka a flush?
-	if (Item[0].count == handsize) {
-		//victory, we have a flush xd
-		//makes it very easy on us
-		handpotential->difficulty = 0;
-		handpotential->currentHighcard = sortedHand[0].data[levelPos];
-		handpotential->necessaryCards[0] = 1;
-		handpotential->necessaryCards[1] = 1;
-		handpotential->necessaryCards[2] = 1;
-		handpotential->necessaryCards[3] = 1;
-		handpotential->necessaryCards[4] = 1;
-		return(1);
-	}
-
-	//two or less cards off
-	int offby = handsize - Item[0].count;
-	if (offby <= 2) {
-
-		for (int cCard = 0; cCard < handsize; cCard++) {
-			handpotential->neededToSwitch[cCard] = Item[1].ourCards[cCard] + Item[2].ourCards[cCard] + Item[3].ourCards[cCard];
-		}
-
-
-		handpotential->difficulty = offby * offby;
-	}
-
-
-	return(1);
-}
-
-
-
-
-
-//this section is pain...
-//NOTE - redo the whole thing. 
-//Make a struct to return the highest match type, what the highcard of that type is, and highcard overall.
-int straights = 0;
-int flushes = 0;
-
-double handValues[] = { 1000,		950,					900,			800,		600,		500,			 400,			300,		200 };
-
-//								1000					800				700			500		300		250			100				75		50
-
-double calcHandValue(card* hand, int cardCount) {
-	char highcard = 0;
-	for (int c = 0; c < cardCount; c++) {
-		if (hand[c].data[1] > highcard) {
-			highcard = hand[c].data[1];
-		}
-	}
-
-	//todo - Find out why straights are so rare
-	int isInline = inlineCards(hand, &cardCount);
-	int isSameSuit = sameSuit(hand, &cardCount);
-	if (isInline) {
-		straights++;
-	}
-	if (isSameSuit) {
-		flushes++;
-	}
-	//std::cout << straights << ", " << flushes << ". \n";
-	if (isInline & isSameSuit) {
-		if (royalFlush(hand, &cardCount, 1)) {
-			return(handValues[RoyalFlush]);
-		}
-	}
-	if (isInline && isSameSuit) {
-		return(handValues[StraightFlush] + highcard);
-	}
-	if (isSameSuit) {
-		return(handValues[Flush] + highcard);
-	}
-	if (isInline) {
-		return(handValues[Straight] + highcard);
-	}	
-	if (fourkind(hand, &cardCount)) {
-		return(handValues[FourKind] + highcard);
-	}
-	if (fullHouse(hand, &cardCount)) {
-		return(handValues[FullHouse] + highcard);
-	}
-	if (threekind(hand, &cardCount)) {
-		return(handValues[ThreeKind] + highcard);
-	}
-	if (twopair(hand, &cardCount)) {
-		return(handValues[TwoPair] + highcard);
-	}
-	if (onepair(hand, &cardCount)) {
-		return(handValues[OnePair] + highcard);
-	}
-	
-	
-	
-	
-	
-	
-	highcard *= 2;
-	return(highcard);
-}
-
-int sameSuit(card* hand, int* cardCount) {
-	for (int c = 1; c < *cardCount; c++) {
-		if (hand[c].data[0] != hand[0].data[0]) {
-			return(0);
-		}
-	}
-	return(1);
-}
-
-int inlineCards(card* hand, int* cardCount) {
-	if (hand[1].data[1] > hand[0].data[1]) {//ascending check
-		for (int c = 0; c < *cardCount - 1; c++) {
-			if (hand[c].data[1] != hand[c + 1].data[1] - (char)1) {
-				return(0);
-			}
-		}
-		return(1);
-	}
-
-	for (int c = 0; c < *cardCount - 1; c++) {//if we're not ascending we go down ofc.
-		if (hand[c].data[1] != hand[c + 1].data[1] + (char)1) {
-			return(0);
-		}
-	}
-
-	return(1);
-}
-
-int sameLevel(card* hand, int* cardCount) {
-	char key = hand[0].data[1];
-	for (int c = 1; c < *cardCount; c++) {
-		if (hand[c].data[1] != key) {
-			return(0);
-		}
-	}
-	return(1);
-}
-
-int royalFlush(card* hand, int* cardCount) {
-	if (*cardCount < 5) {
-		return(0);
-	}
-
-	if (!sameSuit(hand, cardCount) || !inlineCards(hand, cardCount)) {
-		return(0);
-	}
-
-	return(royalFlush(hand, cardCount, 1));
-}
-
-int royalFlush(card* hand, int* cardCount, int alreadySet) {
-	for (int c = 0; c < *cardCount; c++) {
-		if (hand[c].data[1] == ace) {
-			return(1);
-		}
-	}
-	return(0);
-}
-
-int straightFlush(card* hand, int* cardCount) {
-	if (sameSuit(hand, cardCount) && inlineCards(hand, cardCount)) {
-		return(1);
-	}
-	return(0);
-}
-
-//note: Only officially supports 4/5 card hands
-int fourkind(card* hand, int* cardCount) {
-	if (*cardCount < 4) {
-		return(0);
-	}
-	char key;
-	if (hand[0].data[1] == hand[1].data[1] || hand[0].data[1] == hand[2].data[1]) {
-		key = hand[0].data[1];
-	} else if (hand[1].data[1] == hand[2].data[1]) {
-		key = hand[1].data[1];
-	} else {
-		return(0);
-	}
-	int amount = 0;
-	for (int c = 2; c < *cardCount; c++) {
-		if (hand[c].data[1] != key) {
-			amount++;
-		}
-	}
-	if (amount > 1) {
-		return(0);
-	}
-	return(1);
-}
-
-int fullHouse(card* hand, int* cardCount) {
-	if (threekind(hand, cardCount) && onepair(hand, cardCount)) {
-		return(1);
-	}
-	return(0);
-}
-
-int flush(card* hand, int* cardCount) {
-	return(sameSuit(hand, cardCount));
-}
-
-int straight(card* hand, int* cardCount) {
-	return(inlineCards(hand, cardCount));
-}
-
-int threekind(card* hand, int* cardCount) {
-	if (*cardCount < 3) {
-		return(0);
-	}
-	if (*cardCount == 3) {//if there's only three cards, we only need to check if they're all equal
-		if (hand[0].data[1] == hand[1].data[1] && hand[0].data[1] == hand[2].data[1]) {
-			return(1);
-		}
-	}
-	char currentKey = -1;
-	int currentCap = 0;
-	for (int runthrough = 0; runthrough < *cardCount; runthrough++) {
-		currentKey = hand[runthrough].data[1];
-		for (int c = 0; c < *cardCount; c++) {
-			if (hand[c].data[1] == currentKey) {
-				currentCap++;
-			}
-		}
-		if (currentCap == 3) {
-			return(1);
-		}
-		currentCap = 0;
-	}
-	return(0);
-}
-
-int twopair(card* hand, int* cardCount) {
-	if (*cardCount < 2) {
-		return(0);
-	}
-	char currentKey = -1;
-	int currentCap = 0;
-	int paircount = 0;
-	char* oldKeys = new char[*cardCount];
-	int oldKeyCount = 0;
-	int isInKeys = 0;
-	for (int runthrough = 0; runthrough < *cardCount; runthrough++) {
-		currentKey = hand[runthrough].data[1];
-		for (int c = 0; c < oldKeyCount; c++) {
-			if (currentKey == oldKeys[c]) {
-				isInKeys = 1;
+	switch (Items[0].levelFreq) {
+		case(4):
+			returns.handValue = FourKind;
+			returns.highestInHand = Items[0].ourLevel;
+			returns.uselessCards[0] = (levels[0] != Items[0].ourLevel);
+			returns.uselessCards[1] = (levels[1] != Items[0].ourLevel);
+			returns.uselessCards[2] = (levels[2] != Items[0].ourLevel);
+			returns.uselessCards[3] = (levels[3] != Items[0].ourLevel);
+			returns.uselessCards[4] = (levels[4] != Items[0].ourLevel);
+			break;
+		case(3):
+			if (Items[1].levelFreq == 2) {//full house edgecase
+				returns.handValue = FullHouse;
+				if (Items[0].ourLevel > Items[1].ourLevel) {//If the 3 or the 2 has the highest card
+					returns.highestInHand = Items[0].ourLevel;
+				} else {
+					returns.highestInHand = Items[1].ourLevel;
+				}
+				//All cards needed in a full house
+				returns.uselessCards[0] = 0;
+				returns.uselessCards[1] = 0;
+				returns.uselessCards[2] = 0;
+				returns.uselessCards[3] = 0;
+				returns.uselessCards[4] = 0;
+				break;
+			} else {//not full house
+				returns.handValue = ThreeKind;
+				returns.highestInHand = Items[0].ourLevel;
+				returns.uselessCards[0] = (levels[0] != Items[0].ourLevel);
+				returns.uselessCards[1] = (levels[1] != Items[0].ourLevel);
+				returns.uselessCards[2] = (levels[2] != Items[0].ourLevel);
+				returns.uselessCards[3] = (levels[3] != Items[0].ourLevel);
+				returns.uselessCards[4] = (levels[4] != Items[0].ourLevel);
 				break;
 			}
-		}
-		if (!isInKeys) {
-			oldKeys[oldKeyCount] = currentKey;
-			oldKeyCount++;
-		} else {
-			isInKeys = 0;
-			continue;
-		}
-		for (int c = 0; c < *cardCount; c++) {
-			if (hand[c].data[1] == currentKey) {
-				currentCap++;
+		case(2):
+			if (Items[1].levelFreq == 2) {//Two pair edgecase
+				returns.handValue = TwoPair;
+				if (Items[0].ourLevel > Items[1].ourLevel) {//If the first or second has the highest card
+					returns.highestInHand = Items[0].ourLevel;
+				} else {
+					returns.highestInHand = Items[1].ourLevel;
+				}
+				returns.uselessCards[0] = (levels[0] != Items[0].ourLevel && levels[0] != Items[1].ourLevel);
+				returns.uselessCards[1] = (levels[1] != Items[0].ourLevel && levels[0] != Items[1].ourLevel);
+				returns.uselessCards[2] = (levels[2] != Items[0].ourLevel && levels[0] != Items[1].ourLevel);
+				returns.uselessCards[3] = (levels[3] != Items[0].ourLevel && levels[0] != Items[1].ourLevel);
+				returns.uselessCards[4] = (levels[4] != Items[0].ourLevel && levels[0] != Items[1].ourLevel);
+			} else {
+				returns.highestInHand = Items[0].ourLevel;
+				returns.uselessCards[0] = (levels[0] != Items[0].ourLevel);
+				returns.uselessCards[1] = (levels[1] != Items[0].ourLevel);
+				returns.uselessCards[2] = (levels[2] != Items[0].ourLevel);
+				returns.uselessCards[3] = (levels[3] != Items[0].ourLevel);
+				returns.uselessCards[4] = (levels[4] != Items[0].ourLevel);
 			}
-		}
-		if (currentCap == 2) {
-			paircount++;
-		}
-		currentCap = 0;
-
 	}
-	if (paircount == 2) {
-		delete[] oldKeys;
-		return(1);
-	}
-	delete[] oldKeys;
-	return(0);
-}
-
-int onepair(card* hand, int* cardCount) {
-	if (*cardCount < 2) {
-		return(0);
-	}
-	if (*cardCount == 2) {//if there's only two cards, we only need to check if they're all equal
-		if (hand[0].data[1] == hand[1].data[1]) {
-			return(1);
-		}
-	}
-
-	char currentKey = -1;
-	int currentCap = 0;
-	for (int runthrough = 0; runthrough < *cardCount; runthrough++) {
-		currentKey = hand[runthrough].data[1];
-		for (int c = 0; c < *cardCount; c++) {
-			if (hand[c].data[1] == currentKey) {
-				currentCap++;
-			}
-		}
-		if (currentCap == 2) {
-			return(1);
-		}
-		currentCap = 0;
-	}
-
-	return(0);
 }

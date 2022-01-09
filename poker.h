@@ -11,7 +11,6 @@
 int qsortCompDesecndingFirstByte(const void* a, const void* b);
 int qsortCompDesecndingCardsLevel(const void* a, const void* b);
 
-double calcHandValue(card* hand, int cardCount);
 
 class pokerPlayer : public player {
 	public: 
@@ -79,12 +78,11 @@ class poker {
 
 
 struct handpotential {
-	int difficulty;//0-20 on how hard it is to achieve the new hand (Zero means we HAVE it)
-	char neededToSwitch[5];//If 1, is a card to drop
-	char necessaryCards[5];//Used for returning a whole hand. If 1, we need this card to keep the hand as is.
-	int potentialHandValue;//If we were to get this new hand, how good would it be?
-	char failureBad;//Does failing to get the new hand cause us to lose what we've already got?
-	int currentHighcard;//The highest card we have, for use if this hand is whole.
+	unsigned char difficulty;//0-20 on how hard it is to achieve the new hand (Zero means we HAVE it)
+	unsigned char neededToSwitch[5];//If 1, is a card to drop
+	unsigned char potentialHandValue;//If we were to get this new hand, how good would it be?
+	unsigned char failureBad;//Does failing to get the new hand cause us to lose what we've already got?
+	unsigned char highestInHand;//For use if whole
 };
 typedef struct handpotential handPotential;
 
@@ -98,48 +96,14 @@ struct handvalue {
 typedef struct handvalue handValue;
 
 struct checkerreturn {
-	char neededCards[5];
+	char uselessCards[5];
+	char handValue;
+	char highestInHand;
 };
 typedef struct checkerreturn checkReturn;
 
 handValue findHandValue(Cards* hand);
 
 handValue findValue(Cards* sortedHand);
-checkReturn checkStraight(int* distances, int* suits);
-
-
-
-
-
-
-
-
-
-
-
-//The standard procedure here is to return the 
-//0 for failure, 1 for having found something.
-//They won't set 'failureBad' internally ever.
-//They all need to set 'difficulty' and 'potential hand value', 'needed to switch'is only for if the hand is not whole. Necessary Cards and current highcard are only for a whole hand.
-int straight(Cards* sortedHand, handPotential* handpotential, int handsize);
-int flush(Cards* sortedHand, handPotential* handpotential, int handsize);
-
-
-
-
-
-
-//old
-int sameSuit(card* hand, int* cardCount);
-int inlineCards(card* hand, int* cardCount);
-int sameLevel(card* hand, int* cardCount);
-int royalFlush(card* hand, int* cardCount);
-int royalFlush(card* hand, int* cardCount, int alreadySet);
-int straightFlush(card* hand, int* cardCount);
-int fourkind(card* hand, int* cardCount);
-int fullHouse(card* hand, int* cardCount);
-int flush(card* hand, int* cardCount);
-int straight(card* hand, int* cardCount);
-int threekind(card* hand, int* cardCount);
-int twopair(card* hand, int* cardCount);
-int onepair(card* hand, int* cardCount);
+checkReturn checkStraight(int* levels, int* suits);
+checkReturn checkFlush(int* suits);
