@@ -38,11 +38,11 @@ void gfree(void* memory) {
 
 void* grealloc(void* memory, int Size) {
 	if (memory == NULL) {
-		return(galloc(Size));
+		return(gcalloc(1, Size));
 	}
 	int prevSize = pSize((char*)memory);
 	if (prevSize > Size) {
-		char* newMemory = (char*)galloc(Size);
+		char* newMemory = (char*)gcalloc(1, Size);
 		memcpy(newMemory, memory, Size);
 		gfree(memory);
 		return(newMemory);

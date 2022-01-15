@@ -168,3 +168,91 @@ void player::printHand(int noNewlines) {
 int player::getHandsize() {
 	return(handsize);
 }
+
+void printCards(Cards* hand, int count) {
+	for (int cCard = 0; cCard < count; cCard++) {
+		if (hand[cCard].name == NULL) {
+			printf("%d, %d\n", hand[cCard].data[levelPos], hand[cCard].data[suitPos]);
+		} else {
+			std::cout << hand[cCard].name << '\n';
+		}
+	}
+}
+
+void printCardsNNL(Cards* hand, int count) {
+	for (int cCard = 0; cCard < count; cCard++) {
+		if (hand[cCard].name == NULL) {
+			char* temp = setName(hand[cCard].data[suitPos], hand[cCard].data[levelPos]);
+			printf("%s", temp);
+			gfree(temp);
+		} else {
+			std::cout << hand[cCard].name;
+		}
+		if (cCard < count - 1) {
+			std::cout << ", ";
+		}
+	}
+}
+
+
+char* setName(int suit, int level) {
+	std::string name;
+	switch (level) {
+		case two:
+			name.append("Two of ");
+			break;
+		case three:
+			name.append("Three of ");
+			break;
+		case four:
+			name.append("Four of ");
+			break;
+		case five:
+			name.append("Five of ");
+			break;
+		case six:
+			name.append("Six of ");
+			break;
+		case seven:
+			name.append("Seven of ");
+			break;
+		case eight:
+			name.append("Eight of ");
+			break;
+		case nine:
+			name.append("Nine of ");
+			break;
+		case ten:
+			name.append("Ten of ");
+			break;
+		case jack:
+			name.append("Jack of ");
+			break;
+		case queen:
+			name.append("Queen of ");
+			break;
+		case king:
+			name.append("King of ");
+			break;
+		case ace:
+			name.append("Ace of ");
+			break;
+	}
+	switch (suit) {
+		case diamonds:
+			name.append("Diamonds");
+			break;
+		case hearts:
+			name.append("Hearts");
+			break;
+		case spades:
+			name.append("Spades");
+			break;
+		case clubs:
+			name.append("Clubs");
+			break;
+	}
+	char* returns = (char*)gcalloc(name.length() + 1, sizeof(char));
+	memcpy(returns, name.c_str(), name.length() + 1);
+	return(returns);
+}

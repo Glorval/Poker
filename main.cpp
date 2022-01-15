@@ -3,6 +3,7 @@
 #include "GlorwynMemory.h"
 #include <stdlib.h>
 #include <time.h>
+
 const int allCards = -1;
 
 
@@ -15,15 +16,15 @@ int main() {
 	testhand[3].data = (unsigned char*)calloc(2, 4);
 	testhand[4].data = (unsigned char*)calloc(2, 4);
 	testhand[0].data[0] = diamonds;
-	testhand[0].data[1] = seven;
+	testhand[0].data[1] = ten;
 	testhand[1].data[0] = diamonds;
-	testhand[1].data[1] = five;
+	testhand[1].data[1] = ten;
 	testhand[2].data[0] = diamonds;
-	testhand[2].data[1] = five;
+	testhand[2].data[1] = nine;
 	testhand[3].data[0] = diamonds;
-	testhand[3].data[1] = three;
+	testhand[3].data[1] = eight;
 	testhand[4].data[0] = spades;
-	testhand[4].data[1] = three;
+	testhand[4].data[1] = seven;
 
 	findValue(testhand);
 

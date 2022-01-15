@@ -53,3 +53,8 @@ class player {
 	protected:
 		int handsize;
 };
+
+//should mostly be used for debug...
+void printCards(Cards* hand, int count);
+void printCardsNNL(Cards* hand, int count);
+char* setName(int suit, int level);
